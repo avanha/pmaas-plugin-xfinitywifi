@@ -1,0 +1,47 @@
+.entity-xfinitywifi-status {
+    display: flex;
+    flex-flow: column;
+}
+
+.entity-xfinitywifi-status .monospace {
+    font-size: 10pt;
+    font-family: "Roboto", "Menlo", "Consolas", monospace;
+}
+
+.entity-xfinitywifi-status .container {
+    display: flex;
+    flex-flow: row wrap;
+    margin: 0 0 5px 0;
+}
+
+.entity-xfinitywifi-status .container > :not(:last-child) {
+    margin-right: 10px;
+}
+
+.entity-xfinitywifi-status .container > * {
+    white-space: nowrap;
+}
+
+.entity-xfinitywifi-status .container .container {
+    margin-bottom: 0;
+}
+
+.entity-xfinitywifi-status .label::after {
+    content: ":";
+}
+
+.entity-xfinitywifi-status .group-label {
+    font-weight: bold;
+}
+
+.entity-xfinitywifi-status .group-label::after {
+    content: " - ";
+}
+
+.entity-xfinitywifi-status .status-ok {
+    color: green;
+}
+
+.entity-xfinitywifi-status .status-bad {
+    color: darkred;
+}

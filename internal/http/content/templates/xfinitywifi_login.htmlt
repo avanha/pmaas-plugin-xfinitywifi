@@ -1,0 +1,37 @@
+<div class="entity-xfinitywifi-card">
+    <div class="name">Last Login Attempt</div>
+    <div class="container">
+        <div class="label">Time</div>
+        {{if .Time.IsZero}}
+            <div class="timestamp">Never</div>
+        {{else}}
+            <div class="timestamp">{{.Time.Format "2006-01-02 3:04:05 PM"}}</div>
+        {{end}}
+    </div>
+    <div class="container">
+        <div class="label">Result</div>
+        {{if .Success}}
+            <div class="value status-ok">Success</div>
+        {{else}}
+            <div class="value status-bad">Failed</div>
+        {{end}}
+    </div>
+    {{if ne .ActionURL ""}}
+        <div class="container">
+            <div class="label">Action URL</div>
+            <div class="value monospace">{{.ActionURL}}</div>
+        </div>
+    {{end}}
+    {{if ne .Message ""}}
+        <div class="container">
+            <div class="label">Message</div>
+            <div class="value">{{.Message}}</div>
+        </div>
+    {{end}}
+    {{if ne .Error ""}}
+        <div class="container">
+            <div class="label">Error</div>
+            <div class="value status-bad monospace">{{.Error}}</div>
+        </div>
+    {{end}}
+</div>

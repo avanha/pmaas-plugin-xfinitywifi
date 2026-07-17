@@ -1,0 +1,48 @@
+<div class="entity-xfinitywifi-card">
+    <div class="name">Last Probe Attempt</div>
+    <div class="container">
+        <div class="label">Time</div>
+        {{if .Time.IsZero}}
+            <div class="timestamp">Never</div>
+        {{else}}
+            <div class="timestamp">{{.Time.Format "2006-01-02 3:04:05 PM"}}</div>
+        {{end}}
+    </div>
+    <div class="container">
+        <div class="label">Result</div>
+        {{if .Connected}}
+            <div class="value status-ok">Connected</div>
+        {{else}}
+            <div class="value status-bad">Not Connected</div>
+        {{end}}
+    </div>
+    <div class="container">
+        <div class="label">Captive Portal</div>
+        {{if .CaptivePortalDetected}}
+            <div class="value status-bad">Detected</div>
+        {{else}}
+            <div class="value status-ok">None</div>
+        {{end}}
+    </div>
+    <div class="container">
+        <div class="label">Successes</div>
+        <div class="value">{{.SuccessCount}} / {{.RequiredSuccesses}} required</div>
+    </div>
+    <div class="probe-targets">
+        <div class="label">Targets</div>
+        {{range .Targets}}
+            <div class="probe-target container">
+                <div class="value monospace">{{.Target}}</div>
+                {{if ne .Error ""}}
+                    <div class="value status-bad monospace">{{.Error}}</div>
+                {{else if .Redirected}}
+                    <div class="value status-bad">redirected ({{.StatusCode}})</div>
+                {{else if .Success}}
+                    <div class="value status-ok">ok ({{.StatusCode}})</div>
+                {{else}}
+                    <div class="value status-bad">status {{.StatusCode}}</div>
+                {{end}}
+            </div>
+        {{end}}
+    </div>
+</div>
