@@ -1,4 +1,4 @@
-package monitor
+package worker
 
 import (
 	"context"
@@ -17,12 +17,12 @@ import (
 	"github.com/avanha/pmaas-plugin-xfinitywifi/internal/common"
 )
 
-// Monitor probes for connectivity and, when a captive portal is detected, attempts to authenticate against the
+// Worker probes for connectivity and, when a captive portal is detected, attempts to authenticate against the
 // Xfinity portal.  It keeps track of the current status and the most recent probe and login attempts.  All
 // accessible state is guarded by a mutex so that it can be safely read from HTTP request goroutines.
-type Monitor struct {
-	pluginConfig config.PluginConfig
-
+type Worker struct {
+	pluginConfig         config.PluginConfig
+	statsTracker         common.StatsTracker
 	mu                   sync.Mutex
 	running              bool
 	connected            bool
@@ -38,43 +38,41 @@ type Monitor struct {
 	lastLogin            *data.LoginAttempt
 }
 
-func NewMonitor(pluginConfig config.PluginConfig) *Monitor {
-	return &Monitor{pluginConfig: pluginConfig}
+func NewWorker(pluginConfig config.PluginConfig, statsTracker common.StatsTracker) *Worker {
+	return &Worker{pluginConfig: pluginConfig, statsTracker: statsTracker}
 }
 
-// SetRunning updates the running flag reported on the status page.
-func (m *Monitor) SetRunning(running bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.running = running
-}
-
-// Run drives the periodic connectivity checks until the context is cancelled.
-func (m *Monitor) Run(ctx context.Context) {
+// Run makes periodic connectivity checks until the context is cancelled.
+func (w *Worker) Run(ctx context.Context) {
+	w.running = true
 	// Run an immediate check on startup.
-	m.checkAndReauth()
+	w.checkAndReauth()
 
-	ticker := time.NewTicker(m.pluginConfig.CheckInterval)
+	ticker := time.NewTicker(w.pluginConfig.CheckInterval)
 	defer ticker.Stop()
 
-	for {
+	for run := true; run; {
 		select {
 		case <-ctx.Done():
-			return
+			run = false
+			break
 		case <-ticker.C:
-			m.checkAndReauth()
+			w.checkAndReauth()
 		}
 	}
+
+	w.running = false
 }
 
-func (m *Monitor) checkAndReauth() {
-	if !m.checkConnectivity() {
-		m.handleReauth()
+func (w *Worker) checkAndReauth() {
+	if !w.checkConnectivity() {
+		//w.handleReauth()
+		fmt.Printf("%T Connectivity appear down\n", w)
 	}
 }
 
 // checkConnectivity probes multiple targets, records the attempt, and returns true if we have open internet.
-func (m *Monitor) checkConnectivity() bool {
+func (w *Worker) checkConnectivity() bool {
 	// Create a client that DOES NOT follow redirects so we can detect captive portals.
 	client := &http.Client{
 		Timeout: 5 * time.Second,
@@ -85,14 +83,14 @@ func (m *Monitor) checkConnectivity() bool {
 
 	attempt := &data.ProbeAttempt{
 		Time:              time.Now(),
-		RequiredSuccesses: m.pluginConfig.RequiredSuccesses,
-		Targets:           make([]data.ProbeTargetResult, 0, len(m.pluginConfig.ProbeTargets)),
+		RequiredSuccesses: w.pluginConfig.RequiredSuccesses,
+		Targets:           make([]data.ProbeTargetResult, 0, len(w.pluginConfig.ProbeTargets)),
 	}
 
 	successes := 0
 	captivePortal := false
 
-	for _, target := range m.pluginConfig.ProbeTargets {
+	for _, target := range w.pluginConfig.ProbeTargets {
 		result := data.ProbeTargetResult{Target: target}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
@@ -129,41 +127,41 @@ func (m *Monitor) checkConnectivity() bool {
 		attempt.Targets = append(attempt.Targets, result)
 	}
 
-	connected := successes >= m.pluginConfig.RequiredSuccesses
+	connected := successes >= w.pluginConfig.RequiredSuccesses
 	attempt.SuccessCount = successes
 	attempt.Connected = connected
 	attempt.CaptivePortalDetected = captivePortal
 
-	m.recordProbe(attempt, connected, captivePortal)
+	w.recordProbe(attempt, connected, captivePortal)
 
 	return connected
 }
 
-func (m *Monitor) recordProbe(attempt *data.ProbeAttempt, connected, captivePortal bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.lastProbe = attempt
-	m.lastCheckTime = attempt.Time
-	m.connected = connected
-	m.captivePortal = captivePortal
-	m.totalChecks++
+func (w *Worker) recordProbe(attempt *data.ProbeAttempt, connected, captivePortal bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.lastProbe = attempt
+	w.lastCheckTime = attempt.Time
+	w.connected = connected
+	w.captivePortal = captivePortal
+	w.totalChecks++
 	if connected {
-		m.totalConnectedChecks++
+		w.totalConnectedChecks++
 	}
 }
 
 // handleReauth coordinates the multi-step Comcast login sequence.
-func (m *Monitor) handleReauth() {
+func (w *Worker) handleReauth() {
 	attempt := &data.LoginAttempt{Time: time.Now()}
 
-	m.mu.Lock()
-	m.totalReauthAttempts++
-	m.mu.Unlock()
+	w.mu.Lock()
+	w.totalReauthAttempts++
+	w.mu.Unlock()
 
 	// Create a cookie jar to persist session cookies across the auth flow.
 	jar, err := cookiejar.New(nil)
 	if err != nil {
-		m.recordLogin(attempt, false, fmt.Sprintf("failed to create cookie jar: %v", err))
+		w.recordLogin(attempt, false, fmt.Sprintf("failed to create cookie jar: %v", err))
 		return
 	}
 
@@ -176,9 +174,9 @@ func (m *Monitor) handleReauth() {
 	}
 
 	// Step 1: Hit a non-SSL target to force the captive portal intercept redirect.
-	resp, err := client.Get(m.pluginConfig.TriggerURL)
+	resp, err := client.Get(w.pluginConfig.TriggerURL)
 	if err != nil {
-		m.recordLogin(attempt, false, fmt.Sprintf("failed to hit trigger URL: %v", err))
+		w.recordLogin(attempt, false, fmt.Sprintf("failed to hit trigger URL: %v", err))
 		return
 	}
 	bodyBytes, _ := io.ReadAll(resp.Body)
@@ -186,42 +184,46 @@ func (m *Monitor) handleReauth() {
 	bodyStr := string(bodyBytes)
 
 	// Step 2: Parse necessary hidden tokens from the landing page.
-	actionURL, payload, err := m.parseLoginPage(bodyStr)
+	actionURL, payload, err := w.parseLoginPage(bodyStr)
 	if err != nil {
-		m.recordLogin(attempt, false, fmt.Sprintf("failed to parse login page elements: %v", err))
+		w.recordLogin(attempt, false, fmt.Sprintf("failed to parse login page elements: %v", err))
 		return
 	}
 	attempt.ActionURL = actionURL
 
 	// Add the actual credentials to the parsed payload.
-	payload.Set("username", m.pluginConfig.Username)
-	payload.Set("password", m.pluginConfig.Password)
+	payload.Set("username", w.pluginConfig.Username)
+	payload.Set("password", w.pluginConfig.Password)
 
 	// Step 3: POST the authentication payload back to the portal.
 	req, err := http.NewRequest(http.MethodPost, actionURL, strings.NewReader(payload.Encode()))
 	if err != nil {
-		m.recordLogin(attempt, false, fmt.Sprintf("failed to create login request: %v", err))
+		w.recordLogin(attempt, false, fmt.Sprintf("failed to create login request: %v", err))
 		return
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	authResp, err := client.Do(req)
 	if err != nil {
-		m.recordLogin(attempt, false, fmt.Sprintf("authentication post failed: %v", err))
+		w.recordLogin(attempt, false, fmt.Sprintf("authentication post failed: %v", err))
 		return
 	}
-	authResp.Body.Close()
+
+	err = authResp.Body.Close()
+	if err != nil {
+		fmt.Printf("Error closing connection: %v\n", err)
+	}
 
 	// Step 4: Verify connection recovery.
 	time.Sleep(3 * time.Second) // Let DHCP/routing settle if necessary.
-	if m.checkConnectivity() {
-		m.recordLoginSuccess(attempt, "portal login successful; internet access restored")
+	if w.checkConnectivity() {
+		w.recordLoginSuccess(attempt, "portal login successful; internet access restored")
 	} else {
-		m.recordLogin(attempt, false, "auth submitted, but keep-alive checks are still failing")
+		w.recordLogin(attempt, false, "auth submitted, but keep-alive checks are still failing")
 	}
 }
 
-func (m *Monitor) recordLogin(attempt *data.LoginAttempt, success bool, message string) {
+func (w *Worker) recordLogin(attempt *data.LoginAttempt, success bool, message string) {
 	attempt.Success = success
 	if success {
 		attempt.Message = message
@@ -229,27 +231,27 @@ func (m *Monitor) recordLogin(attempt *data.LoginAttempt, success bool, message 
 		attempt.Error = message
 	}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.lastLogin = attempt
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.lastLogin = attempt
 	if !success {
-		m.lastErrorMessage = message
-		m.lastErrorTime = attempt.Time
+		w.lastErrorMessage = message
+		w.lastErrorTime = attempt.Time
 	}
 }
 
-func (m *Monitor) recordLoginSuccess(attempt *data.LoginAttempt, message string) {
+func (w *Worker) recordLoginSuccess(attempt *data.LoginAttempt, message string) {
 	attempt.Success = true
 	attempt.Message = message
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.lastLogin = attempt
-	m.totalReauthSuccesses++
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.lastLogin = attempt
+	w.totalReauthSuccesses++
 }
 
 // parseLoginPage extracts the target form action and hidden fields from the portal landing page.
-func (m *Monitor) parseLoginPage(html string) (string, url.Values, error) {
+func (w *Worker) parseLoginPage(html string) (string, url.Values, error) {
 	payload := url.Values{}
 
 	var actionURL string
@@ -263,7 +265,7 @@ func (m *Monitor) parseLoginPage(html string) (string, url.Values, error) {
 
 	if actionURL == "" {
 		// Fallback to the standard Comcast entry point if the parser misses it.
-		actionURL = m.pluginConfig.LoginURL
+		actionURL = w.pluginConfig.LoginURL
 	}
 
 	// Example parsing of standard Spring Security 'execution' tokens.
@@ -283,39 +285,4 @@ func (m *Monitor) parseLoginPage(html string) (string, url.Values, error) {
 	}
 
 	return actionURL, payload, nil
-}
-
-// Snapshot returns a consistent, point-in-time view of the plugin status and recent attempts.
-func (m *Monitor) Snapshot() common.StatusAndEntities {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	result := common.StatusAndEntities{
-		Status: data.PluginStatus{
-			Running:               m.running,
-			Connected:             m.connected,
-			CaptivePortalDetected: m.captivePortal,
-			Username:              m.pluginConfig.Username,
-			CheckInterval:         m.pluginConfig.CheckInterval,
-			LastCheckTime:         m.lastCheckTime,
-			TotalChecks:           m.totalChecks,
-			TotalConnectedChecks:  m.totalConnectedChecks,
-			TotalReauthAttempts:   m.totalReauthAttempts,
-			TotalReauthSuccesses:  m.totalReauthSuccesses,
-			LastErrorMessage:      m.lastErrorMessage,
-			LastErrorTime:         m.lastErrorTime,
-		},
-	}
-
-	if m.lastProbe != nil {
-		probeCopy := *m.lastProbe
-		result.LastProbe = &probeCopy
-	}
-
-	if m.lastLogin != nil {
-		loginCopy := *m.lastLogin
-		result.LastLogin = &loginCopy
-	}
-
-	return result
 }

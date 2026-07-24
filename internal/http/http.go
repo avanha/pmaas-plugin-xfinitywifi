@@ -20,18 +20,6 @@ var statusTemplate = spi.TemplateInfo{
 	Styles: []string{"css/xfinitywifi_status.css"},
 }
 
-var probeTemplate = spi.TemplateInfo{
-	Name:   "xfinitywifi_probe",
-	Paths:  []string{"templates/xfinitywifi_probe.htmlt"},
-	Styles: []string{"css/xfinitywifi_card.css"},
-}
-
-var loginTemplate = spi.TemplateInfo{
-	Name:   "xfinitywifi_login",
-	Paths:  []string{"templates/xfinitywifi_login.htmlt"},
-	Styles: []string{"css/xfinitywifi_card.css"},
-}
-
 type Handler struct {
 	container   spi.IPMAASContainer
 	entityStore common.EntityStore
@@ -48,14 +36,8 @@ func (h *Handler) Init(container spi.IPMAASContainer, entityStore common.EntityS
 	container.EnableStaticContent("static")
 	container.AddRoute("/plugins/xfinitywifi/", h.handleHttpListRequest)
 	container.RegisterEntityRenderer(
-		reflect.TypeOf((*data.PluginStatus)(nil)).Elem(),
+		reflect.TypeFor[data.PluginStatus](),
 		h.statusDataRendererFactory)
-	container.RegisterEntityRenderer(
-		reflect.TypeOf((*data.ProbeAttempt)(nil)).Elem(),
-		h.probeDataRendererFactory)
-	container.RegisterEntityRenderer(
-		reflect.TypeOf((*data.LoginAttempt)(nil)).Elem(),
-		h.loginDataRendererFactory)
 }
 
 func (h *Handler) handleHttpListRequest(writer http.ResponseWriter, request *http.Request) {
@@ -66,15 +48,7 @@ func (h *Handler) handleHttpListRequest(writer http.ResponseWriter, request *htt
 		result = common.StatusAndEntities{}
 	}
 
-	entityPointers := make([]any, 0, 2)
-
-	if result.LastProbe != nil {
-		entityPointers = append(entityPointers, result.LastProbe)
-	}
-
-	if result.LastLogin != nil {
-		entityPointers = append(entityPointers, result.LastLogin)
-	}
+	entityPointers := make([]any, 0)
 
 	h.container.RenderList(
 		writer,
@@ -92,20 +66,4 @@ func (h *Handler) statusDataRendererFactory() (spi.EntityRenderer, error) {
 		&statusTemplate,
 		func(entity any) bool { _, ok := entity.(*data.PluginStatus); return ok },
 		"*PluginStatus")
-}
-
-func (h *Handler) probeDataRendererFactory() (spi.EntityRenderer, error) {
-	return spi.TemplateBasedRendererFactory(
-		h.container,
-		&probeTemplate,
-		func(entity any) bool { _, ok := entity.(*data.ProbeAttempt); return ok },
-		"*ProbeAttempt")
-}
-
-func (h *Handler) loginDataRendererFactory() (spi.EntityRenderer, error) {
-	return spi.TemplateBasedRendererFactory(
-		h.container,
-		&loginTemplate,
-		func(entity any) bool { _, ok := entity.(*data.LoginAttempt); return ok },
-		"*LoginAttempt")
 }
