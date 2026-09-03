@@ -87,8 +87,8 @@ func (p *plugin) deregisterEntities() {
 
 }
 
-func (p *plugin) trackProbeAttempt() bool {
-	return false
+func (p *plugin) trackProbeAttempt(probeAttempt *data.ProbeAttempt, connected bool, captivePortal bool) bool {
+	return true
 }
 
 func (p *plugin) getStatusAndEntities() common.StatusAndEntities {

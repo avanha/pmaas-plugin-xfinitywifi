@@ -104,13 +104,19 @@ func (w *Worker) checkConnectivity() bool {
 
 		resp, err := client.Do(req)
 		cancel()
+
 		if err != nil {
 			// Network error (no IP, DNS resolution failed, etc.).
 			result.Error = err.Error()
 			attempt.Targets = append(attempt.Targets, result)
 			continue
 		}
-		resp.Body.Close()
+
+		err = resp.Body.Close()
+
+		if err != nil {
+			fmt.Printf("Error closing connection: %v\n", err)
+		}
 
 		result.StatusCode = resp.StatusCode
 
@@ -132,21 +138,16 @@ func (w *Worker) checkConnectivity() bool {
 	attempt.Connected = connected
 	attempt.CaptivePortalDetected = captivePortal
 
-	w.recordProbe(attempt, connected, captivePortal)
+	w.recordProbeAttempt(attempt, connected, captivePortal)
 
 	return connected
 }
 
-func (w *Worker) recordProbe(attempt *data.ProbeAttempt, connected, captivePortal bool) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.lastProbe = attempt
-	w.lastCheckTime = attempt.Time
-	w.connected = connected
-	w.captivePortal = captivePortal
-	w.totalChecks++
-	if connected {
-		w.totalConnectedChecks++
+func (w *Worker) recordProbeAttempt(attempt *data.ProbeAttempt, connected, captivePortal bool) {
+	_, err := w.statsTracker.TrackProbeAttempt(attempt, connected, captivePortal)
+
+	if err != nil {
+		fmt.Println("Error updating stats: ", err)
 	}
 }
 

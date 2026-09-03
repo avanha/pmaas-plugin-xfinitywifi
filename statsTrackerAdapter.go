@@ -1,15 +1,18 @@
 package xfinitywifi
 
-import spi "github.com/avanha/pmaas-spi"
+import (
+	"github.com/avanha/pmaas-plugin-xfinitywifi/data"
+	spi "github.com/avanha/pmaas-spi"
+)
 
 type statsTrackerAdapter struct {
 	parent *plugin
 }
 
-func (s *statsTrackerAdapter) TrackProbeAttempt() (bool, error) {
+func (s *statsTrackerAdapter) TrackProbeAttempt(probeAttempt *data.ProbeAttempt, connect bool, captivePortal bool) (bool, error) {
 	return spi.ExecValueFunctionOnPluginGoRoutine(
 		s.parent.container,
-		s.parent.trackProbeAttempt,
+		func() bool { return s.parent.trackProbeAttempt(probeAttempt, connect, captivePortal) },
 		func() bool { return true },
 		"Unable to track probe attempt")
 }
