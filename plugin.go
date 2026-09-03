@@ -40,6 +40,10 @@ func NewPlugin(pluginConfig config.PluginConfig) Plugin {
 	}
 }
 
+func (p *plugin) ShortName() string {
+	return "xfinitywifi"
+}
+
 func (p *plugin) Init(container spi.IPMAASContainer) {
 	p.container = container
 	p.processConfig()

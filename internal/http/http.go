@@ -34,7 +34,7 @@ func (h *Handler) Init(container spi.IPMAASContainer, entityStore common.EntityS
 	h.entityStore = entityStore
 	container.ProvideContentFS(&contentFS, "content")
 	container.EnableStaticContent("static")
-	container.AddRoute("/plugins/xfinitywifi/", h.handleHttpListRequest)
+	container.AddRoute("", h.handleHttpListRequest)
 	container.RegisterEntityRenderer(
 		reflect.TypeFor[data.PluginStatus](),
 		h.statusDataRendererFactory)
