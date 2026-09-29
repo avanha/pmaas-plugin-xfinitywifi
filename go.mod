@@ -1,5 +1,5 @@
 module github.com/avanha/pmaas-plugin-xfinitywifi
 
-go 1.26.4
+go 1.27.1
 
-require github.com/avanha/pmaas-spi v0.0.7
+require github.com/avanha/pmaas-spi v0.0.8
