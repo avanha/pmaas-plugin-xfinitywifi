@@ -19,19 +19,19 @@
     {{if ne .ActionURL ""}}
         <div class="container">
             <div class="label">Action URL</div>
-            <div class="value monospace">{{.ActionURL}}</div>
+            <div class="value monospace">{{.ActionURL | html}}</div>
         </div>
     {{end}}
     {{if ne .Message ""}}
         <div class="container">
             <div class="label">Message</div>
-            <div class="value">{{.Message}}</div>
+            <div class="value">{{.Message | html}}</div>
         </div>
     {{end}}
     {{if ne .Error ""}}
         <div class="container">
             <div class="label">Error</div>
-            <div class="value status-bad monospace">{{.Error}}</div>
+            <div class="value status-bad monospace">{{.Error | html}}</div>
         </div>
     {{end}}
 </div>

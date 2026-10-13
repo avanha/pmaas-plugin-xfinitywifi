@@ -30,7 +30,7 @@
         <div class="group-label">Account</div>
         <div class="container nowrap">
             <div class="label">Username</div>
-            <div class="value monospace">{{if ne .Username ""}}{{.Username}}{{else}}(not configured){{end}}</div>
+            <div class="value monospace">{{if ne .Username ""}}{{.Username | html}}{{else}}(not configured){{end}}</div>
         </div>
         <div class="container nowrap">
             <div class="label">Check Interval</div>
@@ -79,7 +79,7 @@
                 {{end}}
             </div>
             {{if not .LastErrorTime.IsZero}}
-                <div class="value monospace">{{.LastErrorMessage}}</div>
+                <div class="value monospace">{{.LastErrorMessage | html}}</div>
             {{end}}
         </div>
     </div>

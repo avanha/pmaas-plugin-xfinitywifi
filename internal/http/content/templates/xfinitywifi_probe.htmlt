@@ -26,15 +26,15 @@
     </div>
     <div class="container">
         <div class="label">Successes</div>
-        <div class="value">{{.SuccessCount}} / {{.RequiredSuccesses}} required</div>
+        <div class="value">{{.SuccessCount | html}} / {{.RequiredSuccesses}} required</div>
     </div>
     <div class="probe-targets">
         <div class="label">Targets</div>
         {{range .Targets}}
             <div class="probe-target container">
-                <div class="value monospace">{{.Target}}</div>
+                <div class="value monospace">{{.Target | html}}</div>
                 {{if ne .Error ""}}
-                    <div class="value status-bad monospace">{{.Error}}</div>
+                    <div class="value status-bad monospace">{{.Error | html}}</div>
                 {{else if .Redirected}}
                     <div class="value status-bad">redirected ({{.StatusCode}})</div>
                 {{else if .Success}}
